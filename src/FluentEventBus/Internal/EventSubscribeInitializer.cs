@@ -69,8 +69,6 @@ public class EventSubscribeInitializer : IInitializer
     /// <param name="cancellationToken">The cancellation token</param>
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        _subscriptionProfileManager.Initialize();
-        
         var eventTypes = _subscriptionProfileManager.GetAllEventTypes();
 
         var eventNames = eventTypes.Select(eventType => _eventMapper.GetEventName(eventType)).ToList();

@@ -8,11 +8,6 @@ namespace FluentEventBus.Profile;
 public interface ISubscriptionProfileManager
 {
     /// <summary>
-    /// Initializes the manager by loading all subscription profiles and their handler mappings.
-    /// </summary>
-    internal void Initialize();
-
-    /// <summary>
     /// Determines whether there are any registered subscriptions for the specified event type.
     /// </summary>
     /// <param name="eventType">The event type to check.</param>

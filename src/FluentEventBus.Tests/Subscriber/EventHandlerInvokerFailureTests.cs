@@ -57,7 +57,6 @@ public class EventHandlerInvokerFailureTests
         services.AddSingleton<IEventNameRegistry>(new StubEventNameRegistry());
 
         var provider = services.BuildServiceProvider();
-        ((SubscriptionProfileManager)provider.GetRequiredService<ISubscriptionProfileManager>()).Initialize();
 
         return provider.GetRequiredService<IEventHandlerInvoker>();
     }

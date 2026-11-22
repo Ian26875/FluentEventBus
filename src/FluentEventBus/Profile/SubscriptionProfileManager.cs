@@ -10,51 +10,37 @@ namespace FluentEventBus.Profile;
 public class SubscriptionProfileManager : ISubscriptionProfileManager
 {
     /// <summary>
-    /// The profiles
+    /// Error handler types keyed by event type.
     /// </summary>
-    private readonly IEnumerable<SubscriptionProfile> _profiles;
+    private readonly Dictionary<Type, List<Type>> ErrorHandlers = new();
 
     /// <summary>
-    /// The event mapper
+    /// Event handler executors keyed by event type.
     /// </summary>
-    private readonly IEventNameRegistry _eventMapper;
-    
-    /// <summary>
-    /// Gets or sets the value of the error handlers
-    /// </summary>
-    private Dictionary<Type, List<Type>> ErrorHandlers { get; set; } = new Dictionary<Type, List<Type>>();
+    private readonly Dictionary<Type, List<IEventHandlerExecutor>> EventHandlerExecutors = new();
 
-    /// <summary>
-    /// The event handler executor
-    /// </summary>
-    private Dictionary<Type, List<IEventHandlerExecutor>> EventHandlerExecutors =
-        new Dictionary<Type, List<IEventHandlerExecutor>>();
-    
-    
     /// <summary>
     /// Initializes a new instance of the <see cref="SubscriptionProfileManager"/> class
+    /// and aggregates all subscription and error handler mappings from the provided profiles.
     /// </summary>
     /// <param name="profiles">The profiles</param>
     /// <param name="eventMapper">The event mapper</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentNullException"></exception>
-    public SubscriptionProfileManager(IEnumerable<SubscriptionProfile> profiles, 
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="profiles"/> or <paramref name="eventMapper"/> is null.</exception>
+    public SubscriptionProfileManager(IEnumerable<SubscriptionProfile> profiles,
                                       IEventNameRegistry eventMapper)
     {
-        this._profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
-        this._eventMapper = eventMapper ?? throw new ArgumentNullException(nameof(eventMapper));
-    }
-
-    
-    
-    /// <summary>
-    /// Aggregates subscription and error handler information from multiple profiles.
-    /// </summary>
-    public void Initialize()
-    {
-        foreach (var profile in _profiles)
+        if (profiles is null)
         {
-           
+            throw new ArgumentNullException(nameof(profiles));
+        }
+
+        if (eventMapper is null)
+        {
+            throw new ArgumentNullException(nameof(eventMapper));
+        }
+
+        foreach (var profile in profiles)
+        {
             foreach (var pair in profile.EventHandlerExecutors)
             {
                 foreach (var handler in pair.Value)
@@ -62,7 +48,7 @@ public class SubscriptionProfileManager : ISubscriptionProfileManager
                     TryAddExecutors(EventHandlerExecutors, pair.Key, handler);
                 }
             }
-            
+
             foreach (var pair in profile.ErrorHandlers)
             {
                 foreach (var handler in pair.Value)
@@ -74,7 +60,7 @@ public class SubscriptionProfileManager : ISubscriptionProfileManager
 
         foreach (var @event in EventHandlerExecutors.Keys)
         {
-            _eventMapper.Register(@event);
+            eventMapper.Register(@event);
         }
     }
 
@@ -134,7 +120,7 @@ public class SubscriptionProfileManager : ISubscriptionProfileManager
     /// <returns>The bool</returns>
     public bool HasSubscriptionsForEvent(Type eventType)
     {
-        return this.EventHandlerExecutors.ContainsKey(eventType)|| this.EventHandlerExecutors.ContainsKey(eventType);
+        return this.EventHandlerExecutors.ContainsKey(eventType);
     }
 
     public IReadOnlyList<Type> GetAllEventTypes()
