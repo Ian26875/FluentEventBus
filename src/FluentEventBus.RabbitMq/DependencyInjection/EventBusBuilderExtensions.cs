@@ -22,6 +22,22 @@ public static class EventBusBuilderExtensions
                                                Action<RabbitMqConnectionOption> setUpOption,
                                                Action<RabbitMqBindingOption> setUpBindOption)
     {
+        return eventBusBuilder.UseRabbitMqTransport(setUpOption, setUpBindOption, setUpPublishOption: null);
+    }
+
+    /// <summary>
+    ///     Uses the rabbit mq using the specified event bus builder with publish confirm and mandatory routing options
+    /// </summary>
+    /// <param name="eventBusBuilder">The event bus builder</param>
+    /// <param name="setUpOption">The set up option</param>
+    /// <param name="setUpBindOption">The set up bind option</param>
+    /// <param name="setUpPublishOption">The optional publish option configurator</param>
+    /// <returns>The event bus builder</returns>
+    public static IEventBusBuilder UseRabbitMqTransport(this IEventBusBuilder eventBusBuilder,
+                                               Action<RabbitMqConnectionOption> setUpOption,
+                                               Action<RabbitMqBindingOption> setUpBindOption,
+                                               Action<RabbitMqPublishOptions>? setUpPublishOption)
+    {
         eventBusBuilder.Services.AddSingleton<RabbitMqConnectionProvider>();
 
         // Transport-neutral server description consumed by documentation tooling (e.g. AsyncAPI).
@@ -44,6 +60,12 @@ public static class EventBusBuilderExtensions
         eventBusBuilder.Services.AddSingleton<IEventSubscriber>(sp => sp.GetRequiredService<RabbitMqEventSubscriber>());
 
         eventBusBuilder.Services.Configure(setUpOption);
+
+        eventBusBuilder.Services.AddOptions<RabbitMqPublishOptions>();
+        if (setUpPublishOption is not null)
+        {
+            eventBusBuilder.Services.Configure(setUpPublishOption);
+        }
 
         eventBusBuilder.Services.AddOptions<RabbitMqBindingOption>()
             .Configure<IEventNameRegistry>((option, mapper) =>

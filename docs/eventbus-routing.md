@@ -86,3 +86,15 @@ stabilize latency under high throughput. Configure via
 Note: prefetch is applied on a best-effort basis using available
 EasyNetQ APIs at runtime. If the underlying client does not expose
 QoS on the advanced bus, the setting is ignored.
+
+## Publisher Confirms and Mandatory Routing (RabbitMQ)
+Configured via `RabbitMqPublishOptions` (optional third argument to `UseRabbitMqTransport`):
+- `PublisherConfirmEnabled` (default `true`): `PublishAsync` awaits broker ACK before returning.
+- `Mandatory` (default `true`): broker returns unroutable messages (exchange has no matching queue binding) instead of silently dropping them.
+- `ConfirmTimeout` (default `10s`): maximum wait for broker confirmation.
+
+Failures map to `RabbitMqPublishException` (with `RabbitMqPublishFailureReason`):
+- `BrokerRejected`: broker NACKed the publish.
+- `Unroutable` (`RabbitMqMessageReturnedException`): mandatory message returned by broker. Synchronous exception throwing requires `PublisherConfirmEnabled = true`; when disabled, returned messages are logged via `MessageReturned`.
+- `ConfirmTimeout` (`RabbitMqPublishTimeoutException`): broker did not confirm within `ConfirmTimeout`.
+- `ChannelShutdown` / `ConnectionInterrupted`: AMQP channel closed or broker connection interrupted/unreachable (evicts cached exchange declarations so subsequent publishes re-declare cleanly).

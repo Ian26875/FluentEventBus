@@ -19,7 +19,7 @@ public class RabbitMqIntegrationTests
     [Fact(DisplayName = "RabbitMQ_DI_Publish_Consume_Smoke")]
     public async Task RabbitMq_DI_Publish_Consume_Smoke()
     {
-        if (!IsEnabled() || !await CanConnectAsync("localhost", 5672))
+        if (!IsIntegrationEnabled() || !await CanConnectAsync("localhost", 5672))
         {
             return;
         }
@@ -75,11 +75,47 @@ public class RabbitMqIntegrationTests
         {
             CurrentTcs = null;
         }
+    }
 
-        static bool IsEnabled()
+    [Fact(DisplayName = "RabbitMQ_Publish_Unroutable_ShouldThrowMessageReturnedException")]
+    public async Task RabbitMq_Publish_Unroutable_ShouldThrowMessageReturnedException()
+    {
+        if (!IsIntegrationEnabled() || !await CanConnectAsync("localhost", 5672))
         {
-            return string.Equals(Environment.GetEnvironmentVariable("RUN_RABBITMQ_TESTS"), "1", StringComparison.OrdinalIgnoreCase);
+            return;
         }
+
+        using var host = Host.CreateDefaultBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddEventBus(builder =>
+                {
+                    builder.UseRabbitMqTransport(
+                        opt =>
+                        {
+                            opt.Host = "localhost";
+                            opt.UserName = "guest";
+                            opt.Password = "guest";
+                        },
+                        bind =>
+                        {
+                            bind.GlobalExchange = $"eventbus.unroutable.{Guid.NewGuid():N}";
+                        });
+                });
+            })
+            .Build();
+
+        var publisher = host.Services.GetRequiredService<IEventPublisher>();
+
+        var act = () => publisher.PublishAsync(new UnroutableTestEvent("no-queue"));
+
+        var assertion = await act.Should().ThrowAsync<RabbitMqMessageReturnedException>();
+        assertion.Which.Reason.Should().Be(RabbitMqPublishFailureReason.Unroutable);
+    }
+
+    private static bool IsIntegrationEnabled()
+    {
+        return string.Equals(Environment.GetEnvironmentVariable("RUN_RABBITMQ_TESTS"), "1", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<bool> CanConnectAsync(string host, int port)
@@ -99,6 +135,7 @@ public class RabbitMqIntegrationTests
     }
 
     private sealed record TestEvent(string Message);
+    private sealed record UnroutableTestEvent(string Message);
 
     private sealed class TestHandler : IEventHandler<TestEvent>
     {

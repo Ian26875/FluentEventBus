@@ -148,6 +148,20 @@ bind.ForEvent<OrderPlaced>()
     .DeclareQueue("orders.queue");
 ```
 
+預設啟用 Publisher Confirms（`PublisherConfirmEnabled = true`）、強制路由檢查（`Mandatory = true`）以及 10 秒確認逾時（`ConfirmTimeout`），當 broker 拒收、無任何佇列匹配（unroutable）、channel/連線中斷或確認逾時時，會拋出 `RabbitMqPublishException`（`RabbitMqMessageReturnedException` / `RabbitMqPublishTimeoutException`）。可透過第三個參數調整設定：
+
+```csharp
+builder.UseRabbitMqTransport(
+    opt => { ... },
+    bind => { ... },
+    publish =>
+    {
+        publish.PublisherConfirmEnabled = true;
+        publish.Mandatory = true;
+        publish.ConfirmTimeout = TimeSpan.FromSeconds(5);
+    });
+```
+
 ## 投遞語意、重試與 Dead Letter
 
 Handler 失敗時例外會傳遞到 transport（除非透過 `CatchExceptionToDo<T>()` 註冊的
