@@ -41,7 +41,6 @@ public class EventBusBenchmarks
         services.AddSingleton<IBenchNotifier, BenchNotifier>();
 
         var provider = services.BuildServiceProvider();
-        ((SubscriptionProfileManager)provider.GetRequiredService<ISubscriptionProfileManager>()).Initialize();
 
         _invoker = provider.GetRequiredService<IEventHandlerInvoker>();
         _publisher = new NullTransportPublisher(

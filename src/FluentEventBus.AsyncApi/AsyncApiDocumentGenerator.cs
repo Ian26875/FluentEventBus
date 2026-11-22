@@ -175,7 +175,6 @@ public sealed class AsyncApiDocumentGenerator
     /// </summary>
     public V3AsyncApiDocument Generate()
     {
-        _subscriptionProfileManager.Initialize();
         PrepareXmlComments();
 
         var entryAssemblyName = System.Reflection.Assembly.GetEntryAssembly()?.GetName();
