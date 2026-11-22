@@ -24,6 +24,10 @@
   </ItemGroup>
 
     <ItemGroup>
+      <InternalsVisibleTo Include="FluentEventBus.RabbitMqTests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\FluentEventBus\FluentEventBus.csproj" />
     </ItemGroup>
 

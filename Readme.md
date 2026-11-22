@@ -148,6 +148,20 @@ bind.ForEvent<OrderPlaced>()
     .DeclareQueue("orders.queue");
 ```
 
+Publisher confirms (`PublisherConfirmEnabled = true`), mandatory routing (`Mandatory = true`), and a 10-second `ConfirmTimeout` are enabled by default so broker rejections, unroutable messages, channel/connection interruptions, and confirm timeouts throw `RabbitMqPublishException` (`RabbitMqMessageReturnedException` / `RabbitMqPublishTimeoutException`). Override them via the optional third parameter:
+
+```csharp
+builder.UseRabbitMqTransport(
+    opt => { ... },
+    bind => { ... },
+    publish =>
+    {
+        publish.PublisherConfirmEnabled = true;
+        publish.Mandatory = true;
+        publish.ConfirmTimeout = TimeSpan.FromSeconds(5);
+    });
+```
+
 ## Delivery Semantics, Retry and Dead Letter
 
 Failed handlers propagate their exception to the transport (unless an
