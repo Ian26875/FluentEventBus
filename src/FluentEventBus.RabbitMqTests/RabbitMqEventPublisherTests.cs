@@ -1,13 +1,11 @@
 using EasyNetQ;
-using EasyNetQ.Consumer;
-using EasyNetQ.DI;
 using EasyNetQ.Persistent;
 using EasyNetQ.Producer;
-using EasyNetQ.Topology;
 using FluentAssertions;
 using FluentEventBus.Event;
 using FluentEventBus.Naming;
 using FluentEventBus.RabbitMq;
+using FluentEventBus.RabbitMqTests.Fakes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client.Exceptions;
@@ -358,123 +356,5 @@ public class RabbitMqEventPublisherTests
         public string GetEventName(Type type) => type.Name;
 
         public Type GetEventType(string type) => typeof(SampleOrderEvent);
-    }
-
-    private sealed class FakeAdvancedBus : IAdvancedBus
-    {
-        private EventHandler<MessageReturnedEventArgs>? _messageReturned;
-        private EventHandler<DisconnectedEventArgs>? _disconnected;
-
-        public Func<Exchange, string, bool, MessageProperties, ReadOnlyMemory<byte>, CancellationToken, Task>? OnPublish { get; init; }
-
-        public int ExchangeDeclareCount { get; private set; }
-        public Exchange LastExchange { get; private set; }
-        public string? LastRoutingKey { get; private set; }
-        public bool LastMandatory { get; private set; }
-        public MessageProperties? LastProperties { get; private set; }
-
-        public int MessageReturnedSubscriberCount => _messageReturned?.GetInvocationList().Length ?? 0;
-        public int DisconnectedSubscriberCount => _disconnected?.GetInvocationList().Length ?? 0;
-
-        public void RaiseMessageReturned(MessageReturnedEventArgs args) => _messageReturned?.Invoke(this, args);
-        public void RaiseDisconnected(DisconnectedEventArgs args) => _disconnected?.Invoke(this, args);
-
-        public bool IsConnected => false;
-        public IServiceResolver Container => throw new NotSupportedException();
-        public IConventions Conventions => throw new NotSupportedException();
-
-        public event EventHandler<ConnectedEventArgs>? Connected { add { } remove { } }
-        public event EventHandler<DisconnectedEventArgs>? Disconnected
-        {
-            add => _disconnected += value;
-            remove => _disconnected -= value;
-        }
-        public event EventHandler<BlockedEventArgs>? Blocked { add { } remove { } }
-        public event EventHandler<UnblockedEventArgs>? Unblocked { add { } remove { } }
-        public event EventHandler<MessageReturnedEventArgs>? MessageReturned
-        {
-            add => _messageReturned += value;
-            remove => _messageReturned -= value;
-        }
-
-        public Task ConnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public IDisposable Consume(Action<IConsumeConfiguration> configure) => throw new NotSupportedException();
-
-        public Task<Exchange> ExchangeDeclareAsync(
-            string name,
-            Action<IExchangeDeclareConfiguration> configure,
-            CancellationToken cancellationToken = default)
-        {
-            ExchangeDeclareCount++;
-            return Task.FromResult(new Exchange(name, EasyNetQ.Topology.ExchangeType.Topic));
-        }
-
-        public Task PublishAsync(
-            Exchange exchange,
-            string routingKey,
-            bool mandatory,
-            MessageProperties properties,
-            ReadOnlyMemory<byte> body,
-            CancellationToken cancellationToken = default)
-        {
-            LastExchange = exchange;
-            LastRoutingKey = routingKey;
-            LastMandatory = mandatory;
-            LastProperties = properties;
-
-            return OnPublish is not null
-                ? OnPublish(exchange, routingKey, mandatory, properties, body, cancellationToken)
-                : Task.CompletedTask;
-        }
-
-        public Task PublishAsync(Exchange exchange, string routingKey, bool mandatory, IMessage message, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task PublishAsync<T>(Exchange exchange, string routingKey, bool mandatory, IMessage<T> message, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<Queue> QueueDeclareAsync(string name, Action<IQueueDeclareConfiguration> configure, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<Queue> QueueDeclareAsync(CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task QueueDeclarePassiveAsync(string name, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task QueueDeleteAsync(string name, bool ifUnused = false, bool ifEmpty = false, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task QueuePurgeAsync(string name, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task ExchangeDeclarePassiveAsync(string name, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task ExchangeDeleteAsync(Exchange exchange, bool ifUnused = false, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<Binding<Queue>> BindAsync(Exchange exchange, Queue queue, string routingKey, IDictionary<string, object> arguments, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<Binding<Exchange>> BindAsync(Exchange source, Exchange destination, string routingKey, IDictionary<string, object> arguments, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task QueueUnbindAsync(string queue, string exchange, string routingKey, IDictionary<string, object> arguments, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task ExchangeUnbindAsync(string destinationExchange, string sourceExchange, string routingKey, IDictionary<string, object> arguments, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<QueueStats> GetQueueStatsAsync(string name, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public IPullingConsumer<PullResult> CreatePullingConsumer(in Queue queue, bool autoAck = true)
-            => throw new NotSupportedException();
-
-        public IPullingConsumer<PullResult<T>> CreatePullingConsumer<T>(in Queue queue, bool autoAck = true)
-            => throw new NotSupportedException();
-
-        public void Dispose() { }
     }
 }

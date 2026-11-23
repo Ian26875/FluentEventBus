@@ -15,15 +15,25 @@ namespace FluentEventBus.RabbitMq;
 public class RabbitMqEventSubscriber : AbstractEventSubscriber, IDisposable
 {
     private readonly RabbitMqBindingOption _rabbitMqBindingOption;
-    private readonly RabbitMqConnectionProvider _connectionProvider;
+    private readonly Func<IAdvancedBus> _advancedBusFactory;
     private readonly ILogger<RabbitMqEventSubscriber> _logger;
     private readonly List<IDisposable> _consumers = new();
 
     public RabbitMqEventSubscriber(RabbitMqConnectionProvider connectionProvider,
                                    IOptions<RabbitMqBindingOption> rabbitMqBindingOptions,
                                    ILogger<RabbitMqEventSubscriber> logger)
+        : this(
+            (connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider))).GetAdvancedBus,
+            rabbitMqBindingOptions,
+            logger)
     {
-        _connectionProvider = connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
+    }
+
+    internal RabbitMqEventSubscriber(Func<IAdvancedBus> advancedBusFactory,
+                                     IOptions<RabbitMqBindingOption> rabbitMqBindingOptions,
+                                     ILogger<RabbitMqEventSubscriber> logger)
+    {
+        _advancedBusFactory = advancedBusFactory ?? throw new ArgumentNullException(nameof(advancedBusFactory));
         _rabbitMqBindingOption = rabbitMqBindingOptions?.Value ?? throw new ArgumentNullException(nameof(rabbitMqBindingOptions));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -32,7 +42,7 @@ public class RabbitMqEventSubscriber : AbstractEventSubscriber, IDisposable
     {
         ArgumentNullException.ThrowIfNull(eventNames);
 
-        var advancedBus = _connectionProvider.GetAdvancedBus();
+        var advancedBus = _advancedBusFactory();
 
         TryConfigurePrefetch(advancedBus);
 
