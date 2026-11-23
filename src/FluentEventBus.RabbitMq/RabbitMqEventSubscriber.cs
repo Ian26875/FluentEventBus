@@ -122,7 +122,11 @@ public class RabbitMqEventSubscriber : AbstractEventSubscriber, IDisposable
                     }
                 }
 
-                var context = new EventContext(body, headers, info.RoutingKey ?? eventName);
+                var resolvedEventName = !string.IsNullOrWhiteSpace(properties?.Type)
+                    ? properties.Type
+                    : (!string.IsNullOrWhiteSpace(info.RoutingKey) ? info.RoutingKey : eventName);
+
+                var context = new EventContext(body, headers, resolvedEventName);
 
                 if (ConsumerReceived is null)
                 {
@@ -167,11 +171,20 @@ public class RabbitMqEventSubscriber : AbstractEventSubscriber, IDisposable
 
         if (retryCount < _rabbitMqBindingOption.MaxRetryCount)
         {
-            properties.Headers ??= new Dictionary<string, object?>();
-            properties.Headers[RetryCountHeader] = retryCount + 1;
+            var retryHeaders = properties?.Headers is not null
+                ? new Dictionary<string, object>(properties.Headers)
+                : new Dictionary<string, object>();
+            retryHeaders[RetryCountHeader] = retryCount + 1;
+
+            var retryProperties = new MessageProperties
+            {
+                DeliveryMode = DeliveryMode.Persistent,
+                Type = context.EventName,
+                Headers = retryHeaders
+            };
 
             // Republish to the same queue via the default exchange, then ack the original delivery.
-            await advancedBus.PublishAsync(Exchange.Default, queue.Name, false, properties, body);
+            await advancedBus.PublishAsync(Exchange.Default, queue.Name, false, retryProperties, body);
 
             _logger.LogWarning(exception,
                 "Handler failed for event {EventName}. Retry {Retry}/{MaxRetry} scheduled.",

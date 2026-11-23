@@ -180,8 +180,44 @@ public class RabbitMqEventSubscriberTests
         retryPublish.Exchange.Name.Should().Be(Exchange.Default.Name);
         retryPublish.RoutingKey.Should().Be("orders.queue");
         retryPublish.Mandatory.Should().BeFalse();
+        retryPublish.Properties.Type.Should().Be("order.created.v1");
         retryPublish.Properties.Headers[Headers.RetryCountKey].Should().Be(2);
         retryPublish.Body.ToArray().Should().Equal(payload);
+    }
+
+    [Fact(DisplayName = "SubscribeAsync_RedeliveredRetryViaDefaultExchange_ShouldPreserveOriginalEventNameFromTypeProperty")]
+    public async Task SubscribeAsync_RedeliveredRetryViaDefaultExchange_ShouldPreserveOriginalEventNameFromTypeProperty()
+    {
+        var fakeBus = new FakeAdvancedBus();
+        using var subscriber = CreateSubscriber(fakeBus, new RabbitMqBindingOption
+        {
+            GlobalExchange = "orders.topic",
+            GlobalQueue = "orders.queue"
+        });
+
+        EventContext? captured = null;
+        subscriber.ConsumerReceived = ctx =>
+        {
+            captured = ctx;
+            return Task.CompletedTask;
+        };
+
+        await subscriber.SubscribeAsync(new List<string> { "order.created.v1" });
+
+        var consumer = fakeBus.RegisteredConsumers.Single();
+        var props = new MessageProperties
+        {
+            Type = "order.created.v1",
+            Headers = new Dictionary<string, object> { [Headers.RetryCountKey] = 1 }
+        };
+        // Default-exchange retry deliveries carry the queue name as RoutingKey.
+        var info = new MessageReceivedInfo("ctag", 2UL, false, "", "orders.queue", "orders.queue");
+
+        var ack = await consumer.Handler(Encoding.UTF8.GetBytes("{}"), props, info, CancellationToken.None);
+
+        ack.Should().Be(AckStrategies.Ack);
+        captured.Should().NotBeNull();
+        captured!.EventName.Should().Be("order.created.v1");
     }
 
     [Theory(DisplayName = "SubscribeAsync_HandlerFailsAtMaxRetry_ShouldReturnNackWithoutRequeue")]
