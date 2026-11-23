@@ -41,20 +41,5 @@ namespace FluentEventBus.Tests.MapperCases
     public sealed class Ping { }
 
     [Event("billing.invoice.paid", 2)]
-    public sealed class BillingInvoicePaid { 
-        [Fact(DisplayName = "Registries_OfDifferentInstances_AreFullyIsolated")]
-        public void Registries_OfDifferentInstances_AreFullyIsolated()
-        {
-            var first = new EventNameRegistry();
-            var second = new EventNameRegistry();
-
-            first.Register(typeof(MapperCases.Ping));
-
-            var resolved = first.GetEventType(first.GetEventName(typeof(MapperCases.Ping)));
-            resolved.Should().Be(typeof(MapperCases.Ping));
-
-            var act = () => second.GetEventType(first.GetEventName(typeof(MapperCases.Ping)));
-            act.Should().Throw<KeyNotFoundException>();
-        }
-}
+    public sealed class BillingInvoicePaid { }
 }

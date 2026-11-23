@@ -10,6 +10,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <InternalsVisibleTo Include="FluentEventBus.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\FluentEventBus\FluentEventBus.csproj" />
     </ItemGroup>
 

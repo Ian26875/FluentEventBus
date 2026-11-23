@@ -1,4 +1,5 @@
 #if NET8_0_OR_GREATER
+using System.Text.Json;
 using FluentAssertions;
 using FluentEventBus.AsyncApi;
 using FluentEventBus.DependencyInjection;
@@ -8,6 +9,8 @@ using FluentEventBus.Naming;
 using FluentEventBus.Subscriber;
 using Microsoft.Extensions.DependencyInjection;
 using Neuroglia.AsyncApi;
+using Neuroglia.AsyncApi.Generation;
+using AsyncApiDocumentGenerator = FluentEventBus.AsyncApi.AsyncApiDocumentGenerator;
 
 namespace FluentEventBus.Tests.AsyncApi;
 
@@ -80,6 +83,80 @@ public class AsyncApiDocumentGeneratorTests
         examples[0].Payload.Should().ContainKey("Carrier");
     }
 
+    [Fact(DisplayName = "Generate_ShouldProduceCanonicalComponentsWithRequiredAndStringFormats")]
+    public async Task Generate_ShouldProduceCanonicalComponentsWithRequiredAndStringFormats()
+    {
+        var generator = BuildGenerator();
+
+        var document = generator.Generate();
+        document.Components.Should().NotBeNull();
+        document.Components!.Schemas.Should().ContainKey("eventBusHeaders");
+        document.Components.Schemas.Should().ContainKey(nameof(OrderShipped));
+        document.Components.Messages.Should().ContainKey(nameof(OrderShipped));
+        document.Components.Messages![nameof(OrderShipped)].Payload!.Reference.Should().Be($"#/components/schemas/{nameof(OrderShipped)}");
+        document.Components.Messages[nameof(OrderShipped)].Headers!.Reference.Should().Be("#/components/schemas/eventBusHeaders");
+        document.Channels["OrderShipped"].Messages[nameof(OrderShipped)].Reference.Should().Be($"#/components/messages/{nameof(OrderShipped)}");
+
+        var json = await generator.SerializeAsync(AsyncApiDocumentFormat.Json);
+        using var jsonDoc = JsonDocument.Parse(json);
+        var schemaEntry = jsonDoc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty(nameof(OrderShipped));
+        var orderSchema = schemaEntry.TryGetProperty("schema", out var wrapped) ? wrapped : schemaEntry;
+
+        var required = orderSchema.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToList();
+        required.Should().Contain(new[] { "OrderId", "Carrier", "ShippedAt", "ProcessingTime" });
+        required.Should().NotContain("Notes");
+
+        var props = orderSchema.GetProperty("properties");
+        props.GetProperty("ShippedAt").GetProperty("type").GetString().Should().Be("string");
+        props.GetProperty("ShippedAt").GetProperty("format").GetString().Should().Be("date-time");
+        props.GetProperty("ProcessingTime").GetProperty("type").GetString().Should().Be("string");
+        props.GetProperty("ProcessingTime").GetProperty("format").GetString().Should().Be("duration");
+    }
+
+    [Fact(DisplayName = "Generate_WithZeroConfigOptions_ShouldPopulateDefaultInfo")]
+    public void Generate_WithZeroConfigOptions_ShouldPopulateDefaultInfo()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddEventBus(builder =>
+        {
+            builder.WithProfile<ShippingProfile>();
+            builder.AddAsyncApiDocument();
+        });
+        services.AddSingleton<IEventNameRegistry>(new StubEventNameRegistry());
+
+        using var provider = services.BuildServiceProvider();
+        var generator = provider.GetRequiredService<FluentEventBus.AsyncApi.AsyncApiDocumentGenerator>();
+
+        var document = generator.Generate();
+
+        document.Info.Title.Should().NotBeNullOrWhiteSpace();
+        document.Info.Version.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact(DisplayName = "DocumentProvider_ShouldServeGeneratedDocumentByTitleOrIdAndEnumeration")]
+    public async Task DocumentProvider_ShouldServeGeneratedDocumentByTitleOrIdAndEnumeration()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        BuildGeneratorCore(services, null);
+        await using var provider = services.BuildServiceProvider();
+
+        var docProvider = provider.GetRequiredService<IAsyncApiDocumentProvider>();
+
+        var byTitle = await docProvider.GetDocumentAsync("Orders Service", "1.2.3");
+        var byId = await docProvider.GetDocumentAsync("Orders Service");
+        var enumerated = docProvider.ToList();
+
+        byTitle.Should().NotBeNull();
+        byTitle!.Title.Should().Be("Orders Service");
+        byId.Should().BeSameAs(byTitle);
+        enumerated.Should().ContainSingle().Which.Should().BeSameAs(byTitle);
+    }
+
     private static AsyncApiDocumentGenerator BuildGenerator(Action<AsyncApiDocumentOptions>? extraSetup = null,
                                                             Action<IServiceCollection>? services = null)
     {
@@ -105,7 +182,12 @@ public class AsyncApiDocumentGeneratorTests
         services.AddSingleton<IEventNameRegistry>(new StubEventNameRegistry());
     }
 
-    private sealed record OrderShipped(Guid OrderId, string Carrier);
+    private sealed record OrderShipped(
+        Guid OrderId,
+        string Carrier,
+        DateTimeOffset ShippedAt = default,
+        TimeSpan ProcessingTime = default,
+        string? Notes = null);
 
     private sealed class OrderShippedHandler : IEventHandler<OrderShipped>
     {
