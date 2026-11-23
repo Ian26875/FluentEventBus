@@ -141,7 +141,10 @@ public class RabbitMqEventPublisher : AbstractEventPublisher, IDisposable
         }
         catch (PublishReturnedException ex)
         {
-            throw new RabbitMqMessageReturnedException(exchangeName, routeKey, returnBox?.Info?.ReturnReason, ex);
+            var returnedInfo = returnBox is not null
+                ? await returnBox.WaitForInfoAsync(TimeSpan.FromMilliseconds(100))
+                : null;
+            throw new RabbitMqMessageReturnedException(exchangeName, routeKey, returnedInfo?.ReturnReason, ex);
         }
         catch (PublishNackedException ex)
         {
@@ -368,11 +371,38 @@ public class RabbitMqEventPublisher : AbstractEventPublisher, IDisposable
     private sealed class ReturnedMessageBox
     {
         private volatile ReturnedPayload? _payload;
+        private readonly TaskCompletionSource<MessageReturnedInfo> _tcs =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public MessageReturnedInfo? Info
         {
             get => _payload?.Info;
-            set => _payload = value is { } info ? new ReturnedPayload(info) : null;
+            set
+            {
+                _payload = value is { } info ? new ReturnedPayload(info) : null;
+                if (value is { } returnedInfo)
+                {
+                    _tcs.TrySetResult(returnedInfo);
+                }
+            }
+        }
+
+        public async Task<MessageReturnedInfo?> WaitForInfoAsync(TimeSpan timeout)
+        {
+            if (_payload is { } payload)
+            {
+                return payload.Info;
+            }
+
+            using var cts = new CancellationTokenSource(timeout);
+            try
+            {
+                return await _tcs.Task.WaitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return _payload?.Info;
+            }
         }
 
         private sealed class ReturnedPayload

@@ -105,6 +105,35 @@ public class RabbitMqEventPublisherTests
         assertion.Which.InnerException.Should().BeSameAs(returnedEx);
     }
 
+    [Fact(DisplayName = "PublishAsync_UnroutableMessage_MessageReturnedFiresAfterPublishReturnedException_ShouldStillCaptureReturnReason")]
+    public async Task PublishAsync_UnroutableMessage_MessageReturnedFiresAfterPublishReturnedException_ShouldStillCaptureReturnReason()
+    {
+        var returnedEx = new PublishReturnedException("Broker has signalled that message is returned");
+        FakeAdvancedBus? bus = null;
+        bus = new FakeAdvancedBus
+        {
+            OnPublish = (exchange, routingKey, _, properties, body, _) =>
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(10);
+                    bus!.RaiseMessageReturned(new MessageReturnedEventArgs(
+                        body,
+                        properties,
+                        new MessageReturnedInfo(exchange.Name, routingKey, "NO_ROUTE")));
+                });
+                return Task.FromException(returnedEx);
+            }
+        };
+        using var publisher = CreatePublisher(bus);
+
+        var act = () => publisher.PublishAsync(new SampleOrderEvent("unroutable"));
+
+        var assertion = await act.Should().ThrowAsync<RabbitMqMessageReturnedException>();
+        assertion.Which.Reason.Should().Be(RabbitMqPublishFailureReason.Unroutable);
+        assertion.Which.ReturnReason.Should().Be("NO_ROUTE");
+    }
+
     [Fact(DisplayName = "PublishAsync_UnroutableMessage_SynchronousMessageReturnedWithoutThrow_ShouldNotReportSuccess")]
     public async Task PublishAsync_UnroutableMessage_SynchronousMessageReturnedWithoutThrow_ShouldNotReportSuccess()
     {
